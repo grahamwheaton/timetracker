@@ -44,6 +44,14 @@ internal static class InputActivity
     }
 }
 
+internal static class WindowsAppIdentity
+{
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+
+    internal static void Apply() => SetCurrentProcessExplicitAppUserModelID("GrahamWheaton.Timeline");
+}
+
 internal sealed class DayTimelineView : UserControl
 {
     private List<TimelineEntry> entries = [];
@@ -199,7 +207,8 @@ internal sealed class MainForm : Form
     private readonly ListView list = new() { View = View.Details, FullRowSelect = true, GridLines = true };
     private readonly TextBox note = new();
     private readonly DayTimelineView timeline = new();
-    private readonly Label dayHeading = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 16) };
+    private readonly Label dayHeading = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 18) };
+    private readonly Label dayCaption = new() { AutoSize = true, Font = new Font("Segoe UI", 11), ForeColor = Color.DimGray };
     private readonly bool autoCapture;
     private readonly System.Windows.Forms.Timer captureTimer = new() { Interval = 5 * 60 * 1000 };
     private bool captureInProgress;
@@ -221,19 +230,36 @@ internal sealed class MainForm : Form
         ClientSize = new Size(900, 780);
         MinimumSize = new Size(760, 680);
         Font = new Font("Segoe UI", 9);
+        BackColor = Color.FromArgb(248, 249, 250);
 
-        dayHeading.Location = new Point(16, 14);
+        dayHeading.Location = new Point(18, 13);
+        dayCaption.Location = new Point(105, 20);
         status.Text = "Ready";
-        status.Location = new Point(18, 49);
+        status.Location = new Point(20, 50);
 
-        var previousDay = new Button { Text = "‹ Previous", Location = new Point(635, 15), Size = new Size(82, 29), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        var today = new Button { Text = "Today", Location = new Point(723, 15), Size = new Size(70, 29), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        var nextDay = new Button { Text = "Next ›", Location = new Point(799, 15), Size = new Size(82, 29), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        var previousDay = MakeHeaderButton("‹", 44);
+        var today = MakeHeaderButton("Today", 78);
+        var nextDay = MakeHeaderButton("›", 44);
+        var navigation = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            Location = new Point(704, 16),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        navigation.Controls.AddRange([previousDay, today, nextDay]);
+        var tooltips = new ToolTip();
+        tooltips.SetToolTip(previousDay, "Previous day");
+        tooltips.SetToolTip(today, "Go to today");
+        tooltips.SetToolTip(nextDay, "Next day");
         previousDay.Click += (_, _) => { selectedDay = selectedDay.AddDays(-1); RefreshPage(); };
         today.Click += (_, _) => { selectedDay = DateTime.Today; RefreshPage(); };
         nextDay.Click += (_, _) => { if (selectedDay.Date < DateTime.Today) selectedDay = selectedDay.AddDays(1); RefreshPage(); };
 
-        timeline.Location = new Point(18, 75);
+        timeline.Location = new Point(18, 76);
         timeline.Size = new Size(864, 425);
         timeline.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         timeline.BorderStyle = BorderStyle.FixedSingle;
@@ -248,12 +274,15 @@ internal sealed class MainForm : Form
 
         var noteLabel = new Label { Text = "Optional note", AutoSize = true, Location = new Point(18, 709), Anchor = AnchorStyles.Bottom | AnchorStyles.Left };
         note.Location = new Point(18, 731);
-        note.Size = new Size(516, 25);
+        note.Size = new Size(487, 25);
         note.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
-        var capture = MakeButton("Capture now", 545, 730, 100);
-        var summary = MakeButton("Open summary", 652, 730, 106);
-        var folder = MakeButton("Data folder", 765, 730, 117);
+        var capture = MakeButton("Capture now", 516, 726, 112);
+        capture.BackColor = Color.FromArgb(39, 112, 126);
+        capture.ForeColor = Color.White;
+        capture.FlatAppearance.BorderColor = capture.BackColor;
+        var summary = MakeButton("Open summary", 636, 726, 124);
+        var folder = MakeButton("Data folder", 768, 726, 114);
 
         capture.Click += async (_, _) => await CaptureAsync(false);
         summary.Click += (_, _) => OpenPath(ExportDailySummary(selectedDay.ToString("yyyy-MM-dd")));
@@ -265,7 +294,7 @@ internal sealed class MainForm : Form
                     if (File.Exists(path)) OpenPath(path);
         };
 
-        Controls.AddRange([dayHeading, status, previousDay, today, nextDay, timeline, list, noteLabel, note, capture, summary, folder]);
+        Controls.AddRange([dayHeading, dayCaption, status, navigation, timeline, list, noteLabel, note, capture, summary, folder]);
         captureTimer.Tick += async (_, _) => await CaptureAsync(true);
         Shown += async (_, _) =>
         {
@@ -282,9 +311,31 @@ internal sealed class MainForm : Form
     {
         Text = text,
         Location = new Point(x, y),
-        Size = new Size(width, 30),
-        Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+        Size = new Size(width, 34),
+        Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+        FlatStyle = FlatStyle.Flat,
+        BackColor = Color.White,
+        UseVisualStyleBackColor = false,
+        Cursor = Cursors.Hand,
+        FlatAppearance = { BorderColor = Color.FromArgb(195, 200, 205) }
     };
+
+    private static Button MakeHeaderButton(string text, int width)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Size = new Size(width, 32),
+            Margin = new Padding(3, 0, 3, 0),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.White,
+            UseVisualStyleBackColor = false,
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI Semibold", 9)
+        };
+        button.FlatAppearance.BorderColor = Color.FromArgb(190, 196, 202);
+        return button;
+    }
 
     private async Task CaptureAsync(bool scheduled)
     {
@@ -491,9 +542,10 @@ internal sealed class MainForm : Form
     {
         var dayText = selectedDay.ToString("yyyy-MM-dd");
         var dayEntries = ReadEntries().Where(e => e.Day == dayText).OrderBy(e => e.Timestamp).ToList();
-        dayHeading.Text = selectedDay.Date == DateTime.Today
-            ? $"Today — {selectedDay:dddd d MMMM}"
-            : selectedDay.ToString("dddd d MMMM yyyy");
+        dayHeading.Text = selectedDay.Date == DateTime.Today ? "Today" : selectedDay.ToString("ddd d MMM");
+        dayCaption.Text = selectedDay.Date == DateTime.Today
+            ? selectedDay.ToString("dddd d MMMM")
+            : selectedDay.ToString("yyyy");
         timeline.SetEntries(dayEntries);
         list.BeginUpdate();
         list.Items.Clear();
@@ -540,6 +592,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        WindowsAppIdentity.Apply();
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm(!args.Contains("--no-auto-capture", StringComparer.OrdinalIgnoreCase)));
     }

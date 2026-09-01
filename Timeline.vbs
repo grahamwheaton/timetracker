@@ -1,6 +1,6 @@
 Option Explicit
 
-Dim shell, fileSystem, appFolder, timelineDll, command
+Dim shell, fileSystem, appFolder, timelineDll, command, argument
 Set shell = CreateObject("WScript.Shell")
 Set fileSystem = CreateObject("Scripting.FileSystemObject")
 
@@ -13,5 +13,7 @@ If Not fileSystem.FileExists(timelineDll) Then
 End If
 
 command = "dotnet """ & timelineDll & """"
+For Each argument In WScript.Arguments
+    command = command & " " & argument
+Next
 shell.Run command, 0, False
-
